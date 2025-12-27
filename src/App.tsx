@@ -1,42 +1,137 @@
 import React, { useRef, useState } from 'react';
 import './App.css'
 
-interface Todo {
-  id: string;
-  completed: "done" | "ongoing";
-  text: string;
+import { useNavigate, useParams } from 'react-router-dom';
+import { BackIcon, ArrowRight, CloseIcon, EditIcon } from './Icons';
+import { type List, type Todo, useLists, useTodos } from './hooks';
+
+export default function App() {
+  return <ListPage />;
 }
 
-function BackIcon() {
+// List Page (home "/")
+function ListItem({ list, deleteList, updateList }: {
+  list: List;
+  deleteList: (id: string) => void;
+  updateList: (l: List) => void;
+}) {
+  const completed = list.todos.filter((t) => t.completed === "done").length;
+  const percentage = Math.round(completed * 100 / list.todos.length) || 0;
+  const navigate = useNavigate();
+
+  const [editMode, setEditMode] = useState(false);
+  const textInput = useRef<HTMLInputElement>(null);
+
+  const onKeyUp = (e: React.KeyboardEvent) => {
+    const name = textInput.current!.value;
+
+    if (name.trim() === "") {
+      return;
+    }
+
+    if (e.key === "Enter") {
+      updateList({ ...list, name });
+      setEditMode(false);
+      return;
+    }
+
+    if (e.key === "Escape") {
+      setEditMode(false);
+      return;
+    }
+  }
+
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-      <path d="M512 256A256 256 0 1 0 0 256a256 256 0 1 0 512 0zM217.4 376.9L117.5 269.8c-3.5-3.8-5.5-8.7-5.5-13.8s2-10.1 5.5-13.8l99.9-107.1c4.2-4.5 10.1-7.1 16.3-7.1c12.3 0 22.3 10 22.3 22.3l0 57.7 96 0c17.7 0 32 14.3 32 32l0 32c0 17.7-14.3 32-32 32l-96 0 0 57.7c0 12.3-10 22.3-22.3 22.3c-6.2 0-12.1-2.6-16.3-7.1z" />
-    </svg>
+    <div className='list'>
+      <div className='list-title'>
+        {editMode ?
+          <input type="text" onKeyUp={onKeyUp} ref={textInput} defaultValue={list.name} />
+          : <span className="title">{list.name}</span>
+        }
+        <div>
+          <button className='btn' onClick={() => setEditMode(true)}>
+            <EditIcon />
+          </button>
+          <button className='btn' onClick={() => navigate(`/lists/${list.id}`)}>
+            <ArrowRight />
+          </button>
+          <button className='btn' onClick={() => deleteList(list.id)}>
+            <CloseIcon />
+          </button>
+        </div>
+      </div>
+
+      <div className='bar'>
+        <span className='percentage' style={{ width: `${percentage}%` }}>
+          <span className='tooltip'> {percentage}% </span>
+        </span>
+      </div>
+    </div>
   );
 }
 
+export function ListPage() {
+  const [lists, addList, updateList, deleteList] = useLists();
+  const textInput = useRef<HTMLInputElement>(null);
+  const onKeyUp = (e: React.KeyboardEvent) => {
+    const name = textInput.current!.value;
+
+    if (name.trim() === "") {
+      return;
+    }
+
+    if (e.key === "Enter") {
+      addList(name);
+      textInput.current!.value = "";
+    }
+
+    if (e.key === "Escape") {
+      textInput.current!.value = "";
+      return;
+    }
+  }
+
+  return (
+    <>
+      <h1>SAW TODO</h1>
+      <div className='container'>
+        <input
+          ref={textInput}
+          onKeyUp={onKeyUp}
+          type="text"
+          className='text-input'
+          placeholder='Inserisci lista...'
+        />
+        {lists.map((l) => <ListItem key={l.id} list={l} deleteList={deleteList} updateList={updateList} />)}
+      </div>
+    </>
+  )
+}
+
+// TODO Page ("/list/:id")
 function TodoItem({
   todo, deleteTodo, updateTodo }: {
     todo: Todo;
     deleteTodo: (id: string) => void;
     updateTodo: (t: Todo) => void;
   }) {
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState<boolean>(false);
   const textInput = useRef<HTMLInputElement>(null);
 
   const onKeyUp = (e: React.KeyboardEvent) => {
     const text = textInput.current!.value;
-
-    if (e.key === "Escape") {
-      setEditMode(false);
-      return;
-    }
 
     if (text.trim() === "") return;
 
     if (e.key === "Enter") {
       updateTodo({ ...todo, text });
       setEditMode(false);
+      return;
+    }
+
+    if (e.key === "Escape") {
+      setEditMode(false);
+      return;
     }
   };
 
@@ -49,11 +144,12 @@ function TodoItem({
           className='text-input'
           type='text'
           defaultValue={todo.text}
-          autoFocus
         />
       ) : (
         <div>
-          <input type="checkbox" checked={todo.completed === "done"}
+          <input
+            type="checkbox"
+            checked={todo.completed === "done"}
             onChange={() => updateTodo({
               ...todo,
               completed: todo.completed === "done" ? "ongoing" : "done",
@@ -72,33 +168,24 @@ function TodoItem({
   );
 }
 
-export default function App() {
-  const [todos, setTodos] = useState<Todo[]>([
-    { id: "1", text: "Inviare mail proposta progetto", completed: "done" },
-    { id: "2", text: "Attendere Ack", completed: "ongoing" },
-    { id: "3", text: "Sviluppare progetto", completed: "ongoing" },
-    { id: "4", text: "Iscriversi ad un appello", completed: "ongoing" },
-    { id: "5", text: "Rispondere correttamente all'esame", completed: "ongoing" },
-    { id: "6", text: "Festeggiare", completed: "ongoing" },
-  ]);
+
+export function TodoPage() {
+  const params = useParams();
+  const navigate = useNavigate();
+
+  const [todos, deleteTodo, updateTodo, addTodo] = useTodos(params.id!);
 
   const textInput = useRef<HTMLInputElement>(null);
 
-  const deleteTodo = (id: string) => setTodos((prev) =>
-    prev.filter((t) => t.id !== id));
-
-  const updateTodo = (newTodo: Todo) =>
-    setTodos((prev) => prev.map((t) => (t.id === newTodo.id ? newTodo : t)));
-
   const onKeyUp = (e: React.KeyboardEvent) => {
     const text = textInput.current!.value;
+
+    if (text.trim() === "") return;
 
     if (e.key === "Escape") {
       textInput.current!.value = "";
       return;
     }
-
-    if (text.trim() === "") return;
 
     if (e.key === "Enter") {
       const todo: Todo = {
@@ -106,7 +193,7 @@ export default function App() {
         text,
         completed: "ongoing",
       };
-      setTodos((prev) => [...prev, todo]);
+      addTodo(todo);
       textInput.current!.value = "";
     }
   };
@@ -116,7 +203,8 @@ export default function App() {
       <header>
         <h1>SAW TODO</h1>
         <h2>HTML</h2>
-        <button className='btn'>
+
+        <button className='btn' onClick={() => navigate("/")}>
           <BackIcon />
         </button>
       </header>
